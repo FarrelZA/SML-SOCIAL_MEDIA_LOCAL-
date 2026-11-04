@@ -1,0 +1,21 @@
+# Batas upload 512 MB.
+# File ini berlaku jika PHP berjalan sebagai modul Apache (seperti di XAMPP).
+# Jika PHP berjalan lewat FPM, atau Apache tidak membaca .htaccess
+# (AllowOverride None, umum di Debian/Ubuntu), ubah nilai yang sama di php.ini.
+
+<IfModule mod_php.c>
+    php_value upload_max_filesize 512M
+    php_value post_max_size 520M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value memory_limit 256M
+</IfModule>
+
+# Untuk PHP 7 (XAMPP versi lama)
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 512M
+    php_value post_max_size 520M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value memory_limit 256M
+</IfModule>

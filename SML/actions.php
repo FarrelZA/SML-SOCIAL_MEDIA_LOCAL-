@@ -1,69 +1,192 @@
 <?php
-require 'config.php'; need_login();
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') exit('Metode tidak valid'); // hanya terima POST
-$u = me(); $a = $_POST['a'] ?? ''; $id = (int)($_POST['id'] ?? 0);
-$back = $_SERVER['HTTP_REFERER'] ?? BASE . 'index.php';              // kembali ke halaman asal
-$dev = is_dev() ? 1 : 0;
+/**
+ * actions.php
+ *
+ * Semua aksi (post, like/dislike, komentar, hapus, edit profil, kelola user)
+ * dikirim ke file ini lewat form POST. Parameter "a" menentukan aksinya.
+ * Setelah selesai, pengguna diarahkan kembali ke halaman asal.
+ */
 
-switch ($a) {
-  case 'post': // membuat postingan
-    [$m, $t] = upload($_FILES['media'] ?? null, 'posts'); $body = trim($_POST['body'] ?? '');
-    if ($body !== '' || $m) $pdo->prepare('INSERT INTO posts(user_id,body,media,media_type) VALUES(?,?,?,?)')->execute([$u['id'], $body, $m, $t]);
-    break;
+require 'config.php';
+need_login();
 
-  case 'del_post': // hapus post: pemilik ATAU DEV
-    $pdo->prepare('DELETE FROM posts WHERE id=? AND (user_id=? OR ?=1)')->execute([$id, $u['id'], $dev]);
-    break;
-
-  case 'react': // like / dislike (klik lagi = batal, klik yang lain = ganti)
-    $v = ($_POST['v'] ?? '') === '1' ? 1 : -1;
-    $c = $pdo->prepare('SELECT type FROM reactions WHERE user_id=? AND post_id=?'); $c->execute([$u['id'], $id]); $old = $c->fetchColumn();
-    if ($old === false) $pdo->prepare('INSERT INTO reactions VALUES(?,?,?)')->execute([$u['id'], $id, $v]);
-    elseif ((int)$old === $v) $pdo->prepare('DELETE FROM reactions WHERE user_id=? AND post_id=?')->execute([$u['id'], $id]);
-    else $pdo->prepare('UPDATE reactions SET type=? WHERE user_id=? AND post_id=?')->execute([$v, $u['id'], $id]);
-    break;
-
-  case 'comment': // komentar teks/link + foto/gif/video
-    [$m, $t] = upload($_FILES['media'] ?? null, 'posts'); $body = trim($_POST['body'] ?? '');
-    if ($body !== '' || $m) $pdo->prepare('INSERT INTO comments(post_id,user_id,body,media,media_type) VALUES(?,?,?,?,?)')->execute([$id, $u['id'], $body, $m, $t]);
-    break;
-
-  case 'del_comment': // hapus komentar: pemilik ATAU DEV
-    $pdo->prepare('DELETE FROM comments WHERE id=? AND (user_id=? OR ?=1)')->execute([$id, $u['id'], $dev]);
-    break;
-
-  case 'profile': // edit profil SENDIRI saja (id diambil dari session, bukan dari form)
-    [$av] = upload($_FILES['avatar'] ?? null, 'avatars'); [$bn] = upload($_FILES['banner'] ?? null, 'banners');
-    $pdo->prepare('UPDATE users SET display_name=?, bio=?, avatar=COALESCE(?,avatar), banner=COALESCE(?,banner) WHERE id=?')
-        ->execute([trim($_POST['display_name']) ?: $u['display_name'], trim($_POST['bio'] ?? ''), $av, $bn, $u['id']]);
-    break;
-
-  case 'del_users': // Dev Panel: ADMIN hapus akun apa pun (dev/user/admin lain), DEV hanya akun user
-    if ($dev && !empty($_POST['ids']) && is_array($_POST['ids'])) {
-      $ids = array_values(array_filter(array_map('intval', $_POST['ids']), fn($i) => $i !== (int)$u['id'])); // akun sendiri tidak ikut
-      if ($ids) {
-        $in = implode(',', array_fill(0, count($ids), '?'));
-        $sql = is_admin() ? "DELETE FROM users WHERE id IN ($in)" : "DELETE FROM users WHERE role='user' AND id IN ($in)";
-        $pdo->prepare($sql)->execute($ids); // post/komentar ikut terhapus (CASCADE)
-      }
-    }
-    $back = BASE . 'dev.php';
-    break;
-
-  case 'set_role': // khusus ADMIN: ubah role akun lain (user/dev/admin)
-    $r = $_POST['role'] ?? '';
-    if (is_admin() && $id !== (int)$u['id'] && in_array($r, ['admin', 'dev', 'user'], true))
-      $pdo->prepare('UPDATE users SET role=? WHERE id=?')->execute([$r, $id]);
-    $back = BASE . 'dev.php';
-    break;
-
-  case 'del_user': // hapus akun: diri sendiri, ADMIN: siapa pun, DEV: hanya akun user
-    $t = $pdo->prepare('SELECT role FROM users WHERE id=?'); $t->execute([$id]); $tr = $t->fetchColumn();
-    if ($id === (int)$u['id'] || is_admin() || ($dev && $tr === 'user')) {
-      $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);  // post/komentar ikut terhapus (CASCADE)
-      if ($id === (int)$u['id']) { session_destroy(); header('Location: ' . BASE . 'login.php'); exit; }
-      $back = BASE . 'index.php';
-    }
-    break;
+// Hanya terima POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    exit('Metode tidak valid');
 }
-header('Location: ' . $back); // selesai, kembali ke halaman asal
+
+$user   = me();
+$action = $_POST['a'] ?? '';
+$id     = (int)($_POST['id'] ?? 0);
+$back   = $_SERVER['HTTP_REFERER'] ?? (BASE . 'index.php');   // halaman asal
+$isDev  = is_dev() ? 1 : 0;
+
+// Jika ukuran kiriman melebihi post_max_size, PHP mengosongkan $_POST dan $_FILES.
+// Beri tahu pengguna alih-alih gagal tanpa pesan.
+if (empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    flash('Ukuran upload melebihi batas server (post_max_size = ' . ini_get('post_max_size')
+        . '). Naikkan batas di php.ini lalu restart Apache.');
+    header('Location: ' . $back);
+    exit;
+}
+
+switch ($action) {
+
+    // -----------------------------------------------------------------
+    // Membuat postingan (teks/link + foto/gif/video)
+    // -----------------------------------------------------------------
+    case 'post':
+        [$media, $mediaType] = upload($_FILES['media'] ?? null, 'posts');
+        $body = trim($_POST['body'] ?? '');
+
+        // Post kosong (tanpa teks dan tanpa media) diabaikan
+        if ($body !== '' || $media) {
+            $stmt = $pdo->prepare('INSERT INTO posts (user_id, body, media, media_type) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$user['id'], $body, $media, $mediaType]);
+        }
+        break;
+
+    // -----------------------------------------------------------------
+    // Hapus post: pemilik ATAU DEV
+    // -----------------------------------------------------------------
+    case 'del_post':
+        $stmt = $pdo->prepare('DELETE FROM posts WHERE id = ? AND (user_id = ? OR ? = 1)');
+        $stmt->execute([$id, $user['id'], $isDev]);
+        break;
+
+    // -----------------------------------------------------------------
+    // Like / dislike: klik lagi = batal, klik tombol lawan = ganti
+    // -----------------------------------------------------------------
+    case 'react':
+        $value = (($_POST['v'] ?? '') === '1') ? 1 : -1;
+
+        $stmt = $pdo->prepare('SELECT type FROM reactions WHERE user_id = ? AND post_id = ?');
+        $stmt->execute([$user['id'], $id]);
+        $old = $stmt->fetchColumn();
+
+        if ($old === false) {
+            // Belum pernah bereaksi: tambah
+            $stmt = $pdo->prepare('INSERT INTO reactions (user_id, post_id, type) VALUES (?, ?, ?)');
+            $stmt->execute([$user['id'], $id, $value]);
+        } elseif ((int)$old === $value) {
+            // Klik reaksi yang sama: batalkan
+            $stmt = $pdo->prepare('DELETE FROM reactions WHERE user_id = ? AND post_id = ?');
+            $stmt->execute([$user['id'], $id]);
+        } else {
+            // Klik reaksi yang berbeda: ganti
+            $stmt = $pdo->prepare('UPDATE reactions SET type = ? WHERE user_id = ? AND post_id = ?');
+            $stmt->execute([$value, $user['id'], $id]);
+        }
+        break;
+
+    // -----------------------------------------------------------------
+    // Komentar teks/link + foto/gif/video ($id = id post)
+    // -----------------------------------------------------------------
+    case 'comment':
+        [$media, $mediaType] = upload($_FILES['media'] ?? null, 'posts');
+        $body = trim($_POST['body'] ?? '');
+
+        if ($body !== '' || $media) {
+            $stmt = $pdo->prepare('INSERT INTO comments (post_id, user_id, body, media, media_type) VALUES (?, ?, ?, ?, ?)');
+            $stmt->execute([$id, $user['id'], $body, $media, $mediaType]);
+        }
+        break;
+
+    // -----------------------------------------------------------------
+    // Hapus komentar: pemilik ATAU DEV
+    // -----------------------------------------------------------------
+    case 'del_comment':
+        $stmt = $pdo->prepare('DELETE FROM comments WHERE id = ? AND (user_id = ? OR ? = 1)');
+        $stmt->execute([$id, $user['id'], $isDev]);
+        break;
+
+    // -----------------------------------------------------------------
+    // Edit profil SENDIRI (id diambil dari session, bukan dari form)
+    // Foto profil dan banner hanya menerima gambar/GIF.
+    // -----------------------------------------------------------------
+    case 'profile':
+        [$avatar] = upload($_FILES['avatar'] ?? null, 'avatars', false);
+        [$banner] = upload($_FILES['banner'] ?? null, 'banners', false);
+
+        $displayName = trim($_POST['display_name'] ?? '');
+        if ($displayName === '') {
+            $displayName = $user['display_name'];
+        }
+
+        // COALESCE: jika tidak ada file baru, pertahankan foto lama
+        $stmt = $pdo->prepare(
+            'UPDATE users
+             SET display_name = ?, bio = ?, avatar = COALESCE(?, avatar), banner = COALESCE(?, banner)
+             WHERE id = ?'
+        );
+        $stmt->execute([$displayName, trim($_POST['bio'] ?? ''), $avatar, $banner, $user['id']]);
+        break;
+
+    // -----------------------------------------------------------------
+    // Dev Panel: hapus banyak akun sekaligus.
+    // ADMIN: akun apa pun, DEV: hanya akun dengan role user.
+    // -----------------------------------------------------------------
+    case 'del_users':
+        if ($isDev && !empty($_POST['ids']) && is_array($_POST['ids'])) {
+            // Akun sendiri tidak ikut terhapus
+            $ids = array_values(array_filter(
+                array_map('intval', $_POST['ids']),
+                fn($i) => $i !== (int)$user['id']
+            ));
+
+            if ($ids) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+                if (is_admin()) {
+                    $sql = "DELETE FROM users WHERE id IN ($placeholders)";
+                } else {
+                    $sql = "DELETE FROM users WHERE role = 'user' AND id IN ($placeholders)";
+                }
+
+                // Post, komentar, dan reaksi ikut terhapus (ON DELETE CASCADE)
+                $pdo->prepare($sql)->execute($ids);
+            }
+        }
+        $back = BASE . 'dev.php';
+        break;
+
+    // -----------------------------------------------------------------
+    // Khusus ADMIN: ubah role akun lain (user / dev / admin)
+    // -----------------------------------------------------------------
+    case 'set_role':
+        $role = $_POST['role'] ?? '';
+
+        if (is_admin() && $id !== (int)$user['id'] && in_array($role, ['admin', 'dev', 'user'], true)) {
+            $stmt = $pdo->prepare('UPDATE users SET role = ? WHERE id = ?');
+            $stmt->execute([$role, $id]);
+        }
+        $back = BASE . 'dev.php';
+        break;
+
+    // -----------------------------------------------------------------
+    // Hapus satu akun: diri sendiri; ADMIN: siapa pun; DEV: hanya akun user
+    // -----------------------------------------------------------------
+    case 'del_user':
+        $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ?');
+        $stmt->execute([$id]);
+        $targetRole = $stmt->fetchColumn();
+
+        if ($id === (int)$user['id'] || is_admin() || ($isDev && $targetRole === 'user')) {
+            // Post, komentar, dan reaksi ikut terhapus (ON DELETE CASCADE)
+            $stmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
+            $stmt->execute([$id]);
+
+            // Menghapus akun sendiri: keluar dan kembali ke halaman login
+            if ($id === (int)$user['id']) {
+                session_destroy();
+                header('Location: ' . BASE . 'login.php');
+                exit;
+            }
+
+            $back = BASE . 'index.php';
+        }
+        break;
+}
+
+// Selesai, kembali ke halaman asal
+header('Location: ' . $back);
