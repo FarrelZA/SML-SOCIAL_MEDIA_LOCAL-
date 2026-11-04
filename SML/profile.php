@@ -17,8 +17,9 @@ $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([$id]);
 $x = $stmt->fetch();
 
-// Profil DEV/ADMIN disembunyikan dari USER lain (kecuali profil sendiri)
-if (!$x || ($x['role'] !== 'user' && !is_dev() && $x['id'] != $u['id'])) {
+// Semua role (ADMIN, DEV, USER) bisa melihat profil siapa pun.
+// Hanya id yang tidak ada di database yang dianggap tidak ditemukan.
+if (!$x) {
     echo '<p class="empty">Pengguna tidak ditemukan.</p>';
     require 'includes/bottom.php';
     exit;

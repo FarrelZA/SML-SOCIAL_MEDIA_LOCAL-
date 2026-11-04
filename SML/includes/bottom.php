@@ -5,9 +5,8 @@
         <div class="card">
             <h3>Pengguna</h3>
             <?php
-            // USER biasa hanya melihat akun berole user; DEV/ADMIN melihat semua
-            $where = is_dev() ? '' : "WHERE role = 'user' ";
-            $users = $pdo->query('SELECT id, username, display_name, avatar FROM users ' . $where . 'ORDER BY id DESC LIMIT 6');
+            // 6 akun terbaru, semua role (ADMIN, DEV, USER) tampil untuk semua orang
+            $users = $pdo->query('SELECT id, username, display_name, avatar FROM users ORDER BY id DESC LIMIT 6');
             foreach ($users as $x): ?>
                 <a class="row" href="<?= BASE ?>profile.php?id=<?= $x['id'] ?>">
                     <?= avatar($x) ?>
