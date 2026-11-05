@@ -50,12 +50,7 @@ $u = me();
             <a href="javascript:location.reload()" title="Refresh"><?= icon('refresh') ?></a>
         </header>
         <?php
-        // Pesan error singkat (mis. upload gagal) dari halaman sebelumnya
-        $flashMessages = flash_pull();
-        if ($flashMessages): ?>
-            <div class="flash">
-                <?php foreach ($flashMessages as $message): ?>
-                    <p><?= e($message) ?></p>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+        // Pesan singkat dari halaman sebelumnya: error (merah) atau berhasil (hijau)
+        foreach (flash_pull() as $flash): ?>
+            <div class="flash<?= $flash['type'] === 'ok' ? ' ok' : '' ?>"><?= e($flash['text']) ?></div>
+        <?php endforeach; ?>

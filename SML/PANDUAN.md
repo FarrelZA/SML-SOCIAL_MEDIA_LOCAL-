@@ -45,7 +45,7 @@ htdocs/SML/
 ## 3. Hak akses
 | Aksi | ADMIN | DEV | USER |
 |---|---|---|---|
-| Post, like, dislike, komentar, edit profil, hapus post/akun sendiri | ya | ya | ya |
+| Post, like, dislike, komentar, edit profil, ganti password, hapus post/akun sendiri | ya | ya | ya |
 | Hapus post/komentar orang lain | ya | ya | tidak |
 | Membuka Dev Panel | ya | ya | tidak (403) |
 | Hapus akun USER (satuan / banyak di Dev Panel) | ya | ya | tidak |
@@ -58,7 +58,8 @@ Pengecekan hak akses dilakukan di **server** (`actions.php`), bukan hanya dengan
 - **Refresh**: ikon refresh di sidebar, header, dan menu bawah memanggil `location.reload()`.
 - **Foto/GIF/Video**: form memakai `enctype="multipart/form-data"`; `upload()` di `config.php` memeriksa ukuran (maks 512MB per file) dan ekstensi (jpg, jpeg, png, webp, gif, mp4, webm), lalu menyimpan dengan nama acak. Foto profil dan banner hanya menerima gambar/GIF.
 - **Preview**: setelah memilih file di form post, komentar, atau edit profil, `assets/app.js` langsung menampilkan preview (foto/GIF tampil, video bisa diputar) beserta nama dan ukuran file. Tombol **×** membatalkan pilihan. File dengan format tidak didukung atau lebih besar dari batas langsung ditolak dengan pesan, sebelum diunggah.
-- **Pesan error upload**: jika upload gagal di server (terlalu besar, format salah, folder tidak bisa ditulis), alasannya tampil sebagai kotak merah di bawah judul halaman.
+- **Pesan error upload**: jika upload gagal di server (terlalu besar, format salah, folder tidak bisa ditulis), alasannya tampil sebagai kotak merah di bawah judul halaman. Pesan berhasil (mis. password diganti) tampil sebagai kotak hijau.
+- **Ganti password**: buka **Profile > Edit profil > Ganti password**. Wajib mengisi password saat ini; password baru minimal 6 karakter, harus sama dengan kolom konfirmasi, dan berbeda dari password lama. Hanya akun sendiri yang bisa diganti (id diambil dari session, bukan dari form). Setelah berhasil, ID session diperbarui dan pengguna tetap masuk.
 - **Batas upload yang berlaku**: yang terkecil antara 512MB dan `upload_max_filesize`/`post_max_size` di PHP. Angka ini dipakai juga oleh preview, jadi jika php.ini belum diubah, pesan akan menyebut batas yang sebenarnya.
 - **Link**: URL `http(s)://` di teks otomatis diubah jadi link oleh `linkify()`.
 - **Like/Dislike**: klik sekali untuk memberi, klik lagi untuk membatalkan, klik tombol lawan untuk mengganti.

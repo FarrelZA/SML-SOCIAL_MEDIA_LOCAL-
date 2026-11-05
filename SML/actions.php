@@ -142,7 +142,7 @@ switch ($action) {
             $stmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
             $stmt->execute([password_hash($newPassword, PASSWORD_DEFAULT), $user['id']]);
             session_regenerate_id(true);
-            flash('Password berhasil diganti.');
+            flash('Password berhasil diganti.', 'ok');
         }
         $back = BASE . 'profile.php';
         break;

@@ -94,20 +94,24 @@ function is_dev()
 
 
 // ---------------------------------------------------------------------
-// Pesan error singkat (flash message)
+// Pesan singkat (flash message)
 // Disimpan di session, ditampilkan satu kali di halaman berikutnya.
 // ---------------------------------------------------------------------
 
 /**
  * flash(): menyimpan satu pesan untuk ditampilkan di halaman berikutnya.
+ *
+ * @param string $message isi pesan
+ * @param string $type    'error' (merah, bawaan) atau 'ok' (hijau, untuk pesan berhasil)
  */
-function flash($message)
+function flash($message, $type = 'error')
 {
-    $_SESSION['flash'][] = $message;
+    $_SESSION['flash'][] = ['text' => $message, 'type' => $type];
 }
 
 /**
- * flash_pull(): mengambil semua pesan yang tersimpan lalu menghapusnya.
+ * flash_pull(): mengambil semua pesan yang tersimpan (tiap pesan berisi
+ * 'text' dan 'type') lalu menghapusnya.
  */
 function flash_pull()
 {
