@@ -7,6 +7,7 @@
 
 require 'config.php';
 need_login();                       // halaman ini wajib login
+$title = 'Home';                    // judul di header halaman
 require 'includes/top.php';
 require 'includes/post.php';
 ?>
@@ -35,7 +36,7 @@ require 'includes/post.php';
 <?php
 // Ambil 50 post terbaru + jumlah like, dislike, dan reaksi user yang sedang login
 $stmt = $pdo->prepare(
-    'SELECT p.*, u.username, u.display_name, u.avatar,
+    'SELECT p.*, u.username, u.display_name, u.avatar, u.role,
         (SELECT COUNT(*) FROM reactions r WHERE r.post_id = p.id AND r.type = 1)  AS likes,
         (SELECT COUNT(*) FROM reactions r WHERE r.post_id = p.id AND r.type = -1) AS dislikes,
         (SELECT type FROM reactions r WHERE r.post_id = p.id AND r.user_id = ?)   AS mine
@@ -47,6 +48,9 @@ $stmt = $pdo->prepare(
 $stmt->execute([$u['id']]);
 $posts = $stmt->fetchAll();
 
+// #feed: daftar postingan yang diperbarui otomatis oleh assets/live.js
+echo '<div id="feed">';
+
 foreach ($posts as $post) {
     render_post($post);
 }
@@ -54,5 +58,7 @@ foreach ($posts as $post) {
 if (!$posts) {
     echo '<p class="empty">Belum ada postingan. Tulis yang pertama.</p>';
 }
+
+echo '</div>';
 
 require 'includes/bottom.php';

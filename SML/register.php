@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Daftar - SML</title>
     <link rel="stylesheet" href="<?= BASE ?>assets/style.css">
     <link rel="icon" type="image/png" href="<?= BASE ?>assets/favicon.png">
+    <script src="<?= BASE ?>assets/ui.js" defer></script>
 </head>
 <body class="auth">
     <form class="card" method="post">
