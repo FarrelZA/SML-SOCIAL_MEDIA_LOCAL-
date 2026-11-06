@@ -258,11 +258,50 @@ function media_html($path, $type)
     $src = BASE . e($path);
 
     if ($type === 'video') {
-        // preload="metadata": jangan unduh seluruh video (bisa sampai 512 MB) saat halaman dibuka
-        return '<video src="' . $src . '" controls preload="metadata" class="media"></video>';
+        // preload="metadata": jangan unduh seluruh video (bisa sampai 512 MB) saat halaman dibuka.
+        // Hanya satu video yang boleh diputar dalam satu waktu (diatur oleh assets/ui.js).
+        return '<video src="' . $src . '" controls playsinline preload="metadata" class="media"></video>';
     }
 
-    return '<img src="' . $src . '" class="media" alt="">';
+    // loading="lazy": gambar di bawah layar baru diunduh saat didekati
+    return '<img src="' . $src . '" class="media" alt="" loading="lazy" decoding="async">';
+}
+
+
+// ---------------------------------------------------------------------
+// Auto refresh
+// ---------------------------------------------------------------------
+
+/**
+ * data_signature(): "sidik jari" dari semua data yang tampil di layar.
+ *
+ * Browser menanyakan nilai ini ke poll.php setiap beberapa detik. Selama
+ * nilainya sama berarti tidak ada informasi baru, jadi halaman tidak perlu
+ * dimuat ulang. Begitu ada yang berubah (post baru, komentar, like, hapus,
+ * ganti nama/foto/role), nilainya berubah dan assets/live.js memperbarui layar.
+ *
+ * Hanya beberapa query agregat ringan, bukan membaca semua isi tabel.
+ */
+function data_signature()
+{
+    global $pdo;
+
+    $queries = [
+        // post dan komentar: jumlah + id terbesar + total id (tangkap tambah/hapus)
+        'SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(id), 0) FROM posts',
+        'SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(id), 0) FROM comments',
+        // reaksi: siapa menekan apa di post mana (tangkap like, dislike, batal, ganti)
+        "SELECT COUNT(*), COALESCE(SUM(CRC32(CONCAT(user_id, '-', post_id, '-', type))), 0) FROM reactions",
+        // pengguna: akun baru/hapus, nama tampilan, bio, foto, banner, role
+        "SELECT COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', id, display_name, COALESCE(bio, ''), COALESCE(avatar, ''), COALESCE(banner, ''), role))), 0) FROM users",
+    ];
+
+    $parts = [];
+    foreach ($queries as $sql) {
+        $parts[] = implode(',', $pdo->query($sql)->fetch(PDO::FETCH_NUM));
+    }
+
+    return md5(implode(';', $parts));
 }
 
 
@@ -302,6 +341,20 @@ function avatar($user)
     }
 
     return '<span class="av">' . icon('user') . '</span>';
+}
+
+/**
+ * role_badge(): lencana kecil berwarna untuk role.
+ * Secara bawaan hanya ADMIN dan DEV yang diberi lencana; $always = true
+ * menampilkan juga lencana "user" (dipakai di halaman profil).
+ */
+function role_badge($role, $always = false)
+{
+    if ($role === 'user' && !$always) {
+        return '';
+    }
+
+    return '<span class="badge badge-' . e($role) . '">' . e($role) . '</span>';
 }
 
 /**

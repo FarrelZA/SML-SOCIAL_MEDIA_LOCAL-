@@ -8,6 +8,7 @@
 
 require 'config.php';
 need_login();
+$title = 'Profile';                 // judul di header halaman
 require 'includes/top.php';
 require 'includes/post.php';
 
@@ -28,6 +29,8 @@ if (!$x) {
 $own = ($x['id'] == $u['id']);
 ?>
 
+<!-- #pinfo: banner dan info profil, diperbarui otomatis oleh assets/live.js -->
+<section id="pinfo" data-live="pinfo">
 <div class="banner">
     <?php if ($x['banner']): ?>
         <img src="<?= BASE . e($x['banner']) ?>" alt="">
@@ -37,7 +40,7 @@ $own = ($x['id'] == $u['id']);
 <div class="pinfo">
     <?= avatar($x) ?>
     <h2><?= e($x['display_name']) ?></h2>
-    <small>@<?= e($x['username']) ?> &middot; <?= e($x['role']) ?></small>
+    <small>@<?= e($x['username']) ?> &middot; <?= role_badge($x['role'], true) ?></small>
     <p><?= linkify($x['bio']) ?></p>
 
     <?php // ADMIN: hapus siapa pun, DEV: hanya hapus akun user ?>
@@ -50,6 +53,7 @@ $own = ($x['id'] == $u['id']);
         </form>
     <?php endif; ?>
 </div>
+</section>
 
 <?php // Form edit profil dan hapus akun hanya muncul di profil sendiri ?>
 <?php if ($own): ?>
@@ -96,7 +100,7 @@ $own = ($x['id'] == $u['id']);
 <?php
 // Ambil semua post milik user ini + jumlah like, dislike, dan reaksi saya
 $stmt = $pdo->prepare(
-    'SELECT p.*, u.username, u.display_name, u.avatar,
+    'SELECT p.*, u.username, u.display_name, u.avatar, u.role,
         (SELECT COUNT(*) FROM reactions r WHERE r.post_id = p.id AND r.type = 1)  AS likes,
         (SELECT COUNT(*) FROM reactions r WHERE r.post_id = p.id AND r.type = -1) AS dislikes,
         (SELECT type FROM reactions r WHERE r.post_id = p.id AND r.user_id = ?)   AS mine
@@ -107,8 +111,18 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$u['id'], $x['id']]);
 
-foreach ($stmt->fetchAll() as $post) {
+// #feed: daftar postingan yang diperbarui otomatis oleh assets/live.js
+$posts = $stmt->fetchAll();
+echo '<div id="feed">';
+
+foreach ($posts as $post) {
     render_post($post);
 }
+
+if (!$posts) {
+    echo '<p class="empty">Belum ada postingan.</p>';
+}
+
+echo '</div>';
 
 require 'includes/bottom.php';

@@ -14,6 +14,7 @@ if (!is_dev()) {
     exit('Akses ditolak: halaman ini khusus DEV.');
 }
 
+$title = 'Dev Panel';               // judul di header halaman
 require 'includes/top.php';
 
 // Ambil semua akun + jumlah post dan komentar masing-masing
@@ -25,6 +26,10 @@ $rows = $pdo->query(
      ORDER BY FIELD(u.role, 'admin', 'dev', 'user'), u.id DESC"
 )->fetchAll();
 ?>
+
+<!-- #live-area: seluruh Dev Panel, diperbarui otomatis oleh assets/live.js
+     (ditunda jika ada kotak yang sedang dicentang atau dropdown yang sedang dipakai) -->
+<div id="live-area" data-live="dev">
 
 <!-- Satu form untuk seluruh tabel: centang user lalu klik "Hapus terpilih" -->
 <form method="post" action="actions.php"
@@ -81,7 +86,7 @@ $rows = $pdo->query(
                                 <?php endforeach; ?>
                             </select>
                         <?php else: ?>
-                            <?= e($r['role']) ?>
+                            <?= role_badge($r['role'], true) ?>
                         <?php endif; ?>
                     </td>
 
@@ -103,5 +108,7 @@ $rows = $pdo->query(
         </form>
     <?php endforeach; ?>
 <?php endif; ?>
+
+</div>
 
 <?php require 'includes/bottom.php'; ?>

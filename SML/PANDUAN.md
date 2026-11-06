@@ -29,13 +29,16 @@ htdocs/SML/
 ├── profile.php         -> profil, edit profil, hapus akun, hapus user (DEV/ADMIN)
 ├── dev.php             -> Dev Panel: daftar semua user + hapus terpilih + ubah role (khusus DEV/ADMIN)
 ├── actions.php         -> semua aksi: post, like/dislike, komentar, hapus, edit profil, kelola user
+├── poll.php            -> dipanggil otomatis tiap 3 detik: mengembalikan "sidik jari" data untuk auto refresh
 ├── includes/
 │   ├── top.php         -> header HTML + sidebar kiri (desktop) + pesan error
 │   ├── bottom.php      -> kolom kanan (desktop) + menu bawah (HP)
 │   └── post.php        -> fungsi render satu postingan + komentar
 ├── assets/
-│   ├── style.css       -> tampilan (tema gelap, responsif HP & desktop)
-│   └── app.js          -> preview foto/GIF/video sebelum dikirim
+│   ├── style.css       -> tampilan (tema gelap, animasi, responsif HP & desktop)
+│   ├── app.js          -> preview foto/GIF/video sebelum dikirim
+│   ├── ui.js           -> transisi halaman, tombol loading, pesan hilang sendiri, hanya 1 video diputar
+│   └── live.js         -> auto refresh saat ada data baru di database
 └── uploads/            -> dibuat otomatis saat ada upload pertama
     ├── avatars/        -> foto profil
     ├── banners/        -> banner profil
@@ -55,7 +58,18 @@ htdocs/SML/
 Pengecekan hak akses dilakukan di **server** (`actions.php`), bukan hanya dengan menyembunyikan tombol, jadi tidak bisa dibypass lewat inspect element.
 
 ## 4. Cara kerja fitur
-- **Refresh**: ikon refresh di sidebar, header, dan menu bawah memanggil `location.reload()`.
+- **Refresh manual**: ikon refresh di sidebar, header, dan menu bawah memanggil `location.reload()`. Biasanya tidak perlu dipakai lagi karena ada auto refresh di bawah.
+- **Auto refresh**: titik hijau **Live** di header menandakan layar ikut berubah otomatis saat ada informasi baru di database: postingan baru, komentar, like/dislike, postingan dihapus, ganti nama/foto/role, akun baru. Cara kerjanya:
+  1. `assets/live.js` bertanya ke `poll.php` setiap 3 detik. Jawabannya hanya "sidik jari" (md5) dari `data_signature()` di `config.php`, yaitu beberapa query hitung ringan, bukan isi semua tabel.
+  2. Jika sidik jarinya berubah, halaman yang sama diunduh di latar belakang lalu **dibandingkan** dengan yang di layar. Hanya bagian yang berubah yang diganti, halaman tidak dimuat ulang.
+  3. Yang tidak terganggu: video yang sedang diputar, teks komentar yang sedang diketik, file yang sudah dipilih, komentar yang sedang dibuka, dan posisi scroll.
+  4. Jika sedang scroll ke bawah, postingan baru tidak mendorong layar. Muncul tombol **N postingan baru**; klik untuk memasukkannya dan kembali ke atas (atau scroll ke atas sendiri).
+  5. Di Dev Panel, jika ada kotak yang dicentang atau dropdown yang sedang dipakai, tabel tidak diganti dan muncul tombol **Ada pembaruan**.
+  6. Tab yang tidak terlihat tidak ikut polling. Jika server tidak terjangkau, titik berubah abu-abu dan jeda pengecekan diperlebar otomatis; saat pulih kembali hijau.
+  7. Akun yang dihapus atau sesi yang habis otomatis diarahkan ke halaman login.
+  Mengubah jeda 3 detik: ubah `INTERVAL` di `assets/live.js`.
+- **Satu video saja**: memutar sebuah video otomatis menjeda video lain di halaman (termasuk video preview di form post). Diatur oleh `assets/ui.js`, jadi berlaku di semua halaman, juga untuk video dari postingan yang masuk lewat auto refresh.
+- **Animasi dan transisi**: halaman dan postingan masuk bergantian, postingan baru dari auto refresh turun dengan kilatan biru, postingan yang dihapus mengecil, ikon like melompat, tombol kirim menampilkan spinner, pesan hijau hilang sendiri setelah 4,5 detik, isi halaman meredup saat berpindah halaman. Menu yang sedang dibuka ditandai, dan role ADMIN/DEV diberi lencana. Semua animasi otomatis mati jika pengguna mengaktifkan "kurangi gerakan" di sistem operasinya (`prefers-reduced-motion`).
 - **Foto/GIF/Video**: form memakai `enctype="multipart/form-data"`; `upload()` di `config.php` memeriksa ukuran (maks 512MB per file) dan ekstensi (jpg, jpeg, png, webp, gif, mp4, webm), lalu menyimpan dengan nama acak. Foto profil dan banner hanya menerima gambar/GIF.
 - **Preview**: setelah memilih file di form post, komentar, atau edit profil, `assets/app.js` langsung menampilkan preview (foto/GIF tampil, video bisa diputar) beserta nama dan ukuran file. Tombol **×** membatalkan pilihan. File dengan format tidak didukung atau lebih besar dari batas langsung ditolak dengan pesan, sebelum diunggah.
 - **Pesan error upload**: jika upload gagal di server (terlalu besar, format salah, folder tidak bisa ditulis), alasannya tampil sebagai kotak merah di bawah judul halaman. Pesan berhasil (mis. password diganti) tampil sebagai kotak hijau.
